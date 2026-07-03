@@ -2,12 +2,19 @@ import os
 import json
 import re
 import time
+from pathlib import Path
 
 import requests
 import streamlit as st
 from PyPDF2 import PdfReader
 
-OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://integrate.api.nvidia.com/v1")
+try:
+    from dotenv import load_dotenv
+    load_dotenv(Path(__file__).resolve().parent / ".env")
+except ImportError:
+    pass
+
+OPENAI_BASE_URL = os.environ.get("OPENAI_BASE_URL", "https://integrate.api.nvidia.com/v1").rstrip("/")
 OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
 MODEL = os.environ.get("MODEL_ID", "meta/llama-3.1-70b-instruct")
 
@@ -49,13 +56,14 @@ def analyze_resume(resume_text: str) -> dict:
     # retry with exponential backoff on 429 / 5xx
     max_retries = 4
     base_delay = 2.0
+    response = None
     for attempt in range(max_retries):
         response = requests.post(url, headers=headers, json=payload, timeout=120)
         if response.status_code == 429 or 500 <= response.status_code < 600:
             if attempt < max_retries - 1:
-                delay = base_delay * (2 ** attempt)
-                time.sleep(delay)
+                time.sleep(base_delay * (2 ** attempt))
                 continue
+            response.raise_for_status()
         response.raise_for_status()
         content = response.json()["choices"][0]["message"]["content"]
 
@@ -64,8 +72,10 @@ def analyze_resume(resume_text: str) -> dict:
             content = match.group(0)
         return json.loads(content)
 
-    # should not reach here, but raise if all retries exhausted
-    response.raise_for_status()
+    # all retries exhausted
+    if response is not None:
+        response.raise_for_status()
+    raise RuntimeError("analyze_resume: exhausted retries with no response")
 
 
 # ---------- Custom CSS ----------
