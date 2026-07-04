@@ -617,7 +617,7 @@ with upload_tab:
                 st.session_state["resume_text"] = resume_text
                 st.session_state["resume_name"] = uploaded_file.name
 
-                with st.spinner("Analyzing resume with GLM-5.2..."):
+                with st.spinner(f"Analyzing resume with {MODEL}..."):
                     try:
                         result = analyze_resume(resume_text)
                     except requests.exceptions.HTTPError as e:
